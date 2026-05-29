@@ -1,0 +1,4 @@
+
+> bms@1.0.0 dev
+> tsx watch src/api/server.ts
+

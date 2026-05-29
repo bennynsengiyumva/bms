@@ -1,0 +1,352 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Union {
+  id        String   @id @default(uuid())
+  name      String
+  location  String?
+  createdAt DateTime @default(now())
+  fields    Field[]
+  users     User[]
+}
+
+model Field {
+  id        String     @id @default(uuid())
+  unionId   String
+  name      String
+  location  String?
+  createdAt DateTime   @default(now())
+  districts District[]
+  union     Union      @relation(fields: [unionId], references: [id], onDelete: Cascade)
+  users     User[]
+}
+
+model District {
+  id        String        @id @default(uuid())
+  fieldId   String
+  name      String
+  location  String?
+  createdAt DateTime      @default(now())
+  field     Field         @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  churches  LocalChurch[]
+  users     User[]
+}
+
+model LocalChurch {
+  id            String               @id @default(uuid())
+  districtId    String
+  name          String
+  location      String?
+  createdAt     DateTime             @default(now())
+  baptismEvents BaptismEvent[]
+  district      District             @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  members       Member[]
+  toTransfers   MembershipTransfer[] @relation("ToChurch")
+  fromTransfers MembershipTransfer[] @relation("FromChurch")
+  users         User[]
+}
+
+model User {
+  id                   String                   @id @default(uuid())
+  email                String                   @unique
+  passwordHash         String
+  fullName             String
+  phone                String?
+  role                 String
+  unionId              String?
+  fieldId              String?
+  districtId           String?
+  churchId             String?
+  status               String                   @default("active")
+  mfaEnabled           Boolean                  @default(false)
+  mfaSecret            String?
+  backupCodes          String?
+  lastLogin            DateTime?
+  createdAt            DateTime                 @default(now())
+  announcements        Announcement[]
+  auditLogs            AuditLog[]
+  officiatedEvents     BaptismEvent[]
+  interviews           BaptismInterview[]
+  signedRecords        BaptismRecord[]          @relation("PastorSignatures")
+  instructedCandidates Candidate[]              @relation("InstructorCandidates")
+  candidateProfile     Candidate?               @relation("UserCandidate")
+  templateLogs         CertificateTemplateLog[]
+  sentLogs             CommunicationLog[]       @relation("SentLogs")
+  receivedLogs         CommunicationLog[]       @relation("ReceivedLogs")
+  organizedMeetings    CoordinationMeeting[]
+  documentAccessLogs   DocumentAccessLog[]
+  instructorProfile    InstructorProfile?
+  memberProfile        Member?
+  notifications        Notification[]
+  church               LocalChurch?             @relation(fields: [churchId], references: [id])
+  district             District?                @relation(fields: [districtId], references: [id])
+  field                Field?                   @relation(fields: [fieldId], references: [id])
+  union                Union?                   @relation(fields: [unionId], references: [id])
+}
+
+model Candidate {
+  id               String               @id @default(uuid())
+  candidateNumber  String               @unique
+  userId           String               @unique
+  dateOfBirth      DateTime?
+  gender           String?
+  addressProvince  String?
+  addressDistrict  String?
+  addressSector    String?
+  referralSource   String?
+  previousReligion String?
+  instructorId     String?
+  status           String               @default("registered")
+  registrationDate DateTime             @default(now())
+  interviews       BaptismInterview[]
+  baptismRecord    BaptismRecord?
+  instructor       User?                @relation("InstructorCandidates", fields: [instructorId], references: [id])
+  user             User                 @relation("UserCandidate", fields: [userId], references: [id], onDelete: Cascade)
+  lessons          CandidateLesson[]
+  documents        Document[]
+  spiritualLogs    SpiritualGrowthLog[]
+}
+
+model InstructorProfile {
+  id              String               @id @default(uuid())
+  userId          String               @unique
+  qualifications  String?
+  certifications  String?
+  experienceYears Int?
+  specialization  String?
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainings       InstructorTraining[]
+}
+
+model InstructorTraining {
+  id                  String            @id @default(uuid())
+  instructorProfileId String
+  trainingName        String
+  completionDate      DateTime
+  expiryDate          DateTime?
+  instructorProfile   InstructorProfile @relation(fields: [instructorProfileId], references: [id], onDelete: Cascade)
+}
+
+model CommunicationLog {
+  id          String   @id @default(uuid())
+  senderId    String
+  recipientId String
+  subject     String?
+  content     String
+  sentAt      DateTime @default(now())
+  sender      User     @relation("SentLogs", fields: [senderId], references: [id])
+  recipient   User     @relation("ReceivedLogs", fields: [recipientId], references: [id])
+}
+
+model BibleLesson {
+  id                 String            @id @default(uuid())
+  title              String
+  description        String?
+  orderIndex         Int               @unique
+  learningObjectives String?
+  candidateLessons   CandidateLesson[]
+}
+
+model CandidateLesson {
+  id                 String      @id @default(uuid())
+  candidateId        String
+  lessonId           String
+  completionDate     DateTime?
+  understandingScore Int?
+  instructorNotes    String?
+  nextLessonDate     DateTime?
+  lesson             BibleLesson @relation(fields: [lessonId], references: [id])
+  candidate          Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, lessonId])
+}
+
+model SpiritualGrowthLog {
+  id          String    @id @default(uuid())
+  candidateId String
+  logType     String
+  content     String
+  loggedAt    DateTime  @default(now())
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+}
+
+model BaptismInterview {
+  id             String    @id @default(uuid())
+  candidateId    String
+  interviewerId  String
+  interviewDate  DateTime?
+  readinessScore Int?
+  feedback       String?
+  isReady        Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  interviewer    User      @relation(fields: [interviewerId], references: [id])
+  candidate      Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+}
+
+model BaptismEvent {
+  id                  String          @id @default(uuid())
+  churchId            String
+  eventDate           DateTime
+  location            String?
+  officiatingPastorId String
+  createdAt           DateTime        @default(now())
+  officiatingPastor   User            @relation(fields: [officiatingPastorId], references: [id])
+  church              LocalChurch     @relation(fields: [churchId], references: [id])
+  records             BaptismRecord[]
+}
+
+model BaptismRecord {
+  id                String       @id @default(uuid())
+  eventId           String
+  candidateId       String       @unique
+  witnessName       String?
+  sponsorName       String?
+  certificateNumber String?      @unique
+  recordedAt        DateTime     @default(now())
+  signedAt          DateTime?
+  signedByPastorId  String?
+  candidate         Candidate    @relation(fields: [candidateId], references: [id])
+  event             BaptismEvent @relation(fields: [eventId], references: [id])
+  signedByPastor    User?        @relation("PastorSignatures", fields: [signedByPastorId], references: [id])
+  member            Member?
+}
+
+model Member {
+  id              String               @id @default(uuid())
+  userId          String               @unique
+  baptismRecordId String?              @unique
+  currentChurchId String
+  status          String               @default("active")
+  joinDate        DateTime
+  department      String?
+  leadershipRole  String?
+  createdAt       DateTime             @default(now())
+  church          LocalChurch          @relation(fields: [currentChurchId], references: [id])
+  baptismRecord   BaptismRecord?       @relation(fields: [baptismRecordId], references: [id])
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transfers       MembershipTransfer[]
+}
+
+model MembershipTransfer {
+  id           String      @id @default(uuid())
+  memberId     String
+  fromChurchId String
+  toChurchId   String
+  requestDate  DateTime
+  approvalDate DateTime?
+  status       String      @default("pending")
+  notes        String?
+  toChurch     LocalChurch @relation("ToChurch", fields: [toChurchId], references: [id])
+  fromChurch   LocalChurch @relation("FromChurch", fields: [fromChurchId], references: [id])
+  member       Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id          String              @id @default(uuid())
+  candidateId String?
+  name        String
+  fileUrl     String
+  fileType    String
+  category    String
+  uploadedAt  DateTime            @default(now())
+  candidate   Candidate?          @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  accessLogs  DocumentAccessLog[]
+}
+
+model DocumentAccessLog {
+  id         String   @id @default(uuid())
+  documentId String
+  userId     String
+  action     String
+  accessedAt DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model CertificateTemplate {
+  id        String                   @id @default(uuid())
+  name      String
+  type      String
+  content   String
+  version   Int                      @default(1)
+  isActive  Boolean                  @default(true)
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+  logs      CertificateTemplateLog[]
+}
+
+model CertificateTemplateLog {
+  id         String              @id @default(uuid())
+  templateId String
+  userId     String
+  action     String
+  version    Int
+  createdAt  DateTime            @default(now())
+  template   CertificateTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  user       User                @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  action     String
+  resource   String
+  resourceId String?
+  details    String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model CoordinationMeeting {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  meetingDate DateTime
+  location    String?
+  churchLevel String
+  churchId    String
+  organizerId String
+  status      String   @default("scheduled")
+  createdAt   DateTime @default(now())
+  organizer   User     @relation(fields: [organizerId], references: [id])
+}
+
+model Announcement {
+  id         String    @id @default(uuid())
+  title      String
+  content    String
+  targetType String
+  targetId   String?
+  authorId   String
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+  author     User      @relation(fields: [authorId], references: [id])
+}
+
+model CommunicationTemplate {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  subject   String?
+  content   String
+  type      String
+  category  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
